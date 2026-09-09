@@ -66,23 +66,28 @@ command = "/abs/path/to/TradingAgents-fork/.venv/bin/python"
 args = ["-m", "cli_agent.mcp_server"]
 ```
 
-**Claude Desktop** (macOS/Windows — not available on Linux). Edit
-`claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/`,
-Windows: `%APPDATA%\Claude\`):
+**Claude Desktop** (Settings → Developer → Local MCP servers → Edit config,
+or edit `claude_desktop_config.json` directly — macOS:
+`~/Library/Application Support/Claude/`, Windows: `%APPDATA%\Claude\`, Linux:
+`~/.config/Claude/`):
 
 ```json
 {
   "mcpServers": {
     "tradingagents": {
-      "command": "/abs/path/to/TradingAgents-fork/.venv/bin/python",
-      "args": ["-m", "cli_agent.mcp_server"],
-      "cwd": "/abs/path/to/TradingAgents-fork"
+      "command": "/ABSOLUTE/path/to/TradingAgents-fork/.venv/bin/python",
+      "args": ["-m", "cli_agent.mcp_server"]
     }
   }
 }
 ```
 
-Restart Claude Desktop; the tools appear under the connectors icon.
+Use the **real absolute path** (spaces are fine inside the JSON string). No
+`cwd` needed — `pip install -e .` puts `cli_agent` on the venv's path, so
+`-m cli_agent.mcp_server` resolves from anywhere. Add other servers as extra
+keys under `mcpServers`; don't replace them. For FRED, add
+`"env": {"FRED_API_KEY": "..."}` to this block (the app's working dir won't
+pick up `.env`). Restart Claude Desktop; tools appear under the connectors icon.
 
 **Claude.ai (web)** needs a *remote* server — it can't reach a localhost stdio
 process. Run it over HTTP and expose it with a tunnel:
