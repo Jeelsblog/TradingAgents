@@ -66,6 +66,42 @@ command = "/abs/path/to/TradingAgents-fork/.venv/bin/python"
 args = ["-m", "cli_agent.mcp_server"]
 ```
 
+**Claude Desktop** (macOS/Windows — not available on Linux). Edit
+`claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/`,
+Windows: `%APPDATA%\Claude\`):
+
+```json
+{
+  "mcpServers": {
+    "tradingagents": {
+      "command": "/abs/path/to/TradingAgents-fork/.venv/bin/python",
+      "args": ["-m", "cli_agent.mcp_server"],
+      "cwd": "/abs/path/to/TradingAgents-fork"
+    }
+  }
+}
+```
+
+Restart Claude Desktop; the tools appear under the connectors icon.
+
+**Claude.ai (web)** needs a *remote* server — it can't reach a localhost stdio
+process. Run it over HTTP and expose it with a tunnel:
+
+```bash
+python -m cli_agent.mcp_server --http --port 8000
+# in another shell:
+cloudflared tunnel --url http://localhost:8000     # or: ngrok http 8000
+```
+
+Then claude.ai → Settings → Connectors → **Add custom connector** → URL
+`https://<your-tunnel-domain>/mcp`. Requires a paid plan (Pro/Max/Team/
+Enterprise).
+
+⚠️ This server has **no authentication**. A public tunnel URL means anyone who
+has it can call these (read-only, keyless) tools and consume your yfinance /
+FRED quota. Fine for a short session; kill the tunnel when done. For anything
+persistent, deploy it behind auth rather than tunnelling a laptop.
+
 Tools are all read-only. `trading_macro` needs `FRED_API_KEY`;
 `trading_prediction_markets` is best-effort (Polymarket often times out).
 

@@ -277,8 +277,26 @@ def trading_daterange(date: str, days: int) -> str:
 
 
 def main() -> None:
-    server.run("stdio")
+    import argparse
+
+    p = argparse.ArgumentParser(description="tradingagents_mcp server")
+    p.add_argument(
+        "--http",
+        action="store_true",
+        help="serve over streamable HTTP instead of stdio (for claude.ai remote "
+        "connectors via a tunnel; localhost-only by default)",
+    )
+    p.add_argument("--host", default="127.0.0.1", help="HTTP bind host (default 127.0.0.1)")
+    p.add_argument("--port", type=int, default=8000, help="HTTP port (default 8000)")
+    args = p.parse_args()
+
+    if args.http:
+        # stateless_http keeps it simple behind a tunnel; path is /mcp.
+        server.run("streamable-http", host=args.host, port=args.port, stateless_http=True)
+    else:
+        server.run("stdio")
 
 
 if __name__ == "__main__":
     main()
+
