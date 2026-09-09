@@ -1,0 +1,5 @@
+# Extra dependency for the MCP server (cli_agent/mcp_server.py) only.
+# The research_bundle.py path needs nothing beyond the base `pip install -e .`.
+#
+#   pip install -r cli_agent/requirements.txt
+mcp>=2.0

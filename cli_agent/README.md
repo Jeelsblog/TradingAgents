@@ -7,20 +7,27 @@ flat subscription instead.
 
 ## How it works
 
-1. **`research_bundle.py`** assembles a point-in-time data bundle for one
-   ticker — verified market snapshot, price history, per-indicator tables,
-   fundamentals (annual + quarterly statements), ticker + macro news — reusing
-   the framework's own dataflow layer, including its look-ahead guards. **Zero
-   LLM calls.**
-2. The **`trading-analysis` skill** (`.claude/skills/trading-analysis/`) tells
-   the agent to read that bundle and work through every role — Market /
-   Fundamentals / News analyst → bull vs bear debate → Research Manager →
-   Trader → Aggressive / Conservative / Neutral risk debate → Portfolio
-   Manager — writing the same `reports/<ticker>_<timestamp>/` tree the real CLI
-   produces.
-3. **`check_ticker.py`** is a pre-flight: catches missing exchange suffixes,
-   dead symbols, recent IPOs with too little history, SME-platform tickers,
-   and thin volume before you spend a run on them.
+Two ways to get the data to your agent — both reuse the framework's own
+dataflow layer (look-ahead guards intact) and make **zero LLM calls**:
+
+- **`research_bundle.py`** — one-shot: writes a full point-in-time bundle
+  (verified market snapshot, price history, per-indicator tables, annual +
+  quarterly statements, ticker + macro news) to a markdown file the agent
+  reads. Simple, agent-agnostic.
+- **`mcp_server.py`** — an MCP server exposing the same data as ~13 tools
+  (`trading_verified_snapshot`, `trading_indicator`, `trading_fundamentals`,
+  `trading_ticker_news`, `trading_macro`, …) the agent calls on demand. Works
+  in Claude Code, Codex, Cursor — any MCP client.
+
+Then the **`trading-analysis` skill** (`.claude/skills/trading-analysis/`)
+walks the agent through every role — Market / Fundamentals / News analyst →
+bull vs bear debate → Research Manager → Trader → Aggressive / Conservative /
+Neutral risk debate → Portfolio Manager — writing the same
+`reports/<ticker>_<timestamp>/` tree the real CLI produces.
+
+**`check_ticker.py`** is a pre-flight: catches missing exchange suffixes,
+dead symbols, recent IPOs with too little history, SME-platform tickers, and
+thin volume before you spend a run on them.
 
 ## Usage
 
@@ -40,6 +47,27 @@ python -m cli_agent.research_bundle ^NSEI 2026-09-08 --analysts market,news
 
 The skill runs `check_ticker` and `research_bundle` itself, so
 `/trading-analysis <ticker> <date>` is usually all you need.
+
+## MCP server (optional, for incremental tool calls / Codex / Cursor)
+
+```bash
+pip install -r cli_agent/requirements.txt      # installs `mcp`
+```
+
+**Claude Code** — a `.mcp.json` is committed at the repo root; open Claude Code
+here and approve the `tradingagents` server when prompted. It runs
+`.venv/bin/python -m cli_agent.mcp_server`, so the venv must exist at `.venv/`.
+
+**Codex** (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.tradingagents]
+command = "/abs/path/to/TradingAgents-fork/.venv/bin/python"
+args = ["-m", "cli_agent.mcp_server"]
+```
+
+Tools are all read-only. `trading_macro` needs `FRED_API_KEY`;
+`trading_prediction_markets` is best-effort (Polymarket often times out).
 
 ## Notes
 

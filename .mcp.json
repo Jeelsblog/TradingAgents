@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "tradingagents": {
+      "command": ".venv/bin/python",
+      "args": ["-m", "cli_agent.mcp_server"],
+      "env": {}
+    }
+  }
+}

@@ -30,10 +30,20 @@ source .venv/bin/activate
 python -m cli_agent.check_ticker <TICKER>
 ```
 
+(Or `trading_check_ticker` if the MCP server is connected.)
+
 - `NO DATA` / `WEAK` (few bars / thin volume / SME) → stop and tell the user; don't burn effort on a run that can't produce a sound call.
 - For an **ETF**, also warn that you can't see NAV premium/discount — flag it in the final report.
 
-## Step 1 — Build the bundle
+## Step 1 — Get the data
+
+**If the `tradingagents` MCP server is connected** (tools prefixed `trading_`),
+call them directly as you need them: `trading_resolve_symbol`, then
+`trading_verified_snapshot`, `trading_indicator` (once per indicator),
+`trading_price_history`, `trading_fundamentals` + `trading_financial_statement`,
+`trading_ticker_news`, `trading_global_news`, `trading_macro`. Skip the bundle.
+
+**Otherwise build the bundle:**
 
 ```bash
 python -m cli_agent.research_bundle <TICKER> <DATE> --analysts <analysts>

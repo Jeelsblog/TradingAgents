@@ -21,11 +21,11 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import os
-import threading
 from pathlib import Path
 
 # Loads .env (FRED_API_KEY etc.) and applies TRADINGAGENTS_* overrides.
 import tradingagents  # noqa: F401
+from cli_agent._data import daterange as _daterange, guarded as _try
 from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.dataflows.market_data_validator import (
     DEFAULT_SNAPSHOT_INDICATORS,
@@ -47,40 +47,10 @@ ANALYSTS = ("market", "news", "fundamentals")
 PRICE_LOOKBACK_DAYS = 220          # ~10 months of sessions for trend context
 MACRO_SERIES = ("fed_funds_rate", "10y_treasury", "cpi", "unemployment", "yield_curve")
 PREDICTION_TOPICS = ("Fed rate cut", "recession 2026", "India economy")
-CALL_TIMEOUT_S = 30               # a slow vendor never hangs the whole bundle
 
 
 def _section(title: str) -> str:
     return f"\n\n{'=' * 78}\n## {title}\n{'=' * 78}\n"
-
-
-def _try(label: str, fn) -> str:
-    """Run a data pull in a watchdog thread; return its text or a visible note.
-
-    Vendor calls (FRED, Polymarket, yfinance) can hang or 30s-retry; the daemon
-    thread lets the bundle move on and still exit cleanly.
-    """
-    box: dict[str, str] = {}
-
-    def _run() -> None:
-        try:
-            out = fn()
-            box["ok"] = str(out).strip() or f"_{label}: empty result_"
-        except Exception as exc:  # noqa: BLE001 - the error itself is useful signal
-            box["ok"] = f"_{label}: unavailable -- {type(exc).__name__}: {exc}_"
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    t.join(CALL_TIMEOUT_S)
-    if t.is_alive():
-        return f"_{label}: timed out after {CALL_TIMEOUT_S}s (vendor slow/unreachable)_"
-    return box.get("ok", f"_{label}: no result_")
-
-
-def _daterange(curr_date: str, days: int) -> tuple[str, str]:
-    end = dt.date.fromisoformat(curr_date)
-    start = end - dt.timedelta(days=days)
-    return start.isoformat(), end.isoformat()
 
 
 def _instrument_context(raw: str, canonical: str) -> str:
