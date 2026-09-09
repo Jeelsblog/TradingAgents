@@ -1,22 +1,22 @@
 ---
 name: trading-analysis
 description: >-
-  Run the full TradingAgents multi-agent methodology (analysts -> bull/bear
-  debate -> research manager -> trader -> risk debate -> portfolio manager) on
-  a single ticker for a point-in-time date, using a research bundle instead of
-  per-token LLM API calls. Trigger when the user asks to "analyze <ticker>",
-  "run trading analysis", "what's the call on <stock>", or names a ticker + a
-  date. Produces the same report tree as `python -m cli.main`.
+  Run the full TradingAgents multi-agent methodology (analysts, then bull/bear
+  debate, research manager, trader, risk debate, portfolio manager) on one
+  ticker for a point-in-time date, using a research bundle or the tradingagents
+  MCP tools instead of per-token LLM API calls. Trigger when the user asks to
+  analyze a stock or index, run a trading analysis, or asks for the call on a
+  ticker as of a date. Produces the same report tree as the python cli.main run.
 ---
 
 # Trading analysis (subscription-priced)
 
-You reproduce the TradingAgents pipeline yourself, reasoning over a pre-built
-data bundle. No `tradingagents` LLM calls — you ARE the analyst team.
+You reproduce the TradingAgents pipeline yourself, reasoning over pre-fetched
+data. No `tradingagents` LLM calls — you ARE the analyst team.
 
 ## Inputs
 
-`/trading-analysis <TICKER> <YYYY-MM-DD> [analysts] [--rounds N]`
+`/trading-analysis TICKER YYYY-MM-DD [analysts] [--rounds N]`
 
 - **TICKER** — Yahoo symbol with exchange suffix (`RELIANCE.NS`, `^NSEI`, `TCS.NS`). If the user gives a bare Indian name, add `.NS`.
 - **DATE** — the point-in-time "now". All data is filtered to on-or-before this date; never reference anything after it.
@@ -25,47 +25,48 @@ data bundle. No `tradingagents` LLM calls — you ARE the analyst team.
 
 ## Step 0 — Pre-flight
 
-```bash
-source .venv/bin/activate
-python -m cli_agent.check_ticker <TICKER>
-```
-
-(Or `trading_check_ticker` if the MCP server is connected.)
+Run `trading_check_ticker` (MCP) or `python -m cli_agent.check_ticker TICKER`.
 
 - `NO DATA` / `WEAK` (few bars / thin volume / SME) → stop and tell the user; don't burn effort on a run that can't produce a sound call.
 - For an **ETF**, also warn that you can't see NAV premium/discount — flag it in the final report.
 
 ## Step 1 — Get the data
 
-**If the `tradingagents` MCP server is connected** (tools prefixed `trading_`),
-call them directly as you need them: `trading_resolve_symbol`, then
-`trading_verified_snapshot`, `trading_indicator` (once per indicator),
-`trading_price_history`, `trading_fundamentals` + `trading_financial_statement`,
-`trading_ticker_news`, `trading_global_news`, `trading_macro`. Skip the bundle.
+**If the `tradingagents` MCP tools are available** (prefixed `trading_`), call
+them as needed: `trading_resolve_symbol`, then `trading_verified_snapshot`,
+`trading_indicator` (once per indicator), `trading_price_history`,
+`trading_fundamentals` + `trading_financial_statement`, `trading_ticker_news`,
+`trading_global_news`, `trading_macro`.
 
 **Otherwise build the bundle:**
 
 ```bash
-python -m cli_agent.research_bundle <TICKER> <DATE> --analysts <analysts>
+python -m cli_agent.research_bundle TICKER DATE --analysts market,news,fundamentals
 ```
 
-Read the written file fully (`cli_agent/bundles/<TICKER>_<DATE>.md`). It has:
-`Instrument context`, `MARKET DATA` (verified snapshot + price history + per-indicator tables), `FUNDAMENTALS` (point-in-time statements; profile withheld by design), `NEWS & MACRO`.
+Read the written file fully (`cli_agent/bundles/`). It has: instrument context,
+MARKET DATA (verified snapshot + price history + per-indicator tables),
+FUNDAMENTALS (point-in-time statements; profile withheld by design),
+NEWS & MACRO.
 
-**The "Verified market snapshot" block is the source of truth** for any exact price / band / RSI / MACD / MA value. If the price-history table disagrees, flag the discrepancy — never invent a reconciled number. Do not claim a historically-validated bounce or an exact % move unless the bundle's dated rows support it.
+**The verified market snapshot is the source of truth** for any exact price /
+band / RSI / MACD / MA value. If the price-history table disagrees, flag the
+discrepancy — never invent a reconciled number. Do not claim a
+historically-validated bounce or an exact percent move unless dated rows
+support it.
 
 ## Step 2 — Analyst reports
 
 Write each as its own markdown report, detailed and evidence-based, ending with a Markdown summary table and a line `FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL**`.
 
 ### Market Analyst
-Pick **up to 8 complementary** indicators for the current regime (trend / momentum / volatility / volume — don't double up, e.g. not both rsi and stochrsi). For each, read its value and trajectory from the bundle. Cover: trend structure (10 EMA / 50 SMA / 200 SMA, price vs each), momentum (RSI level + path, MACD line/signal/histogram + whether it's widening or converging), volatility (Bollinger position, ATR regime and stop implications), volume confirmation (VWMA vs price). Give explicit resistance/support levels. Note data caveats (e.g. 50 SMA == 200 SMA ⇒ short history; anomalous single bars).
+Pick **up to 8 complementary** indicators for the current regime (trend / momentum / volatility / volume — don't double up, e.g. not both rsi and stochrsi). For each, read its value and trajectory. Cover: trend structure (10 EMA / 50 SMA / 200 SMA, price vs each), momentum (RSI level + path, MACD line/signal/histogram + whether it's widening or converging), volatility (Bollinger position, ATR regime and stop implications), volume confirmation (VWMA vs price). Give explicit resistance/support levels. Note data caveats (e.g. 50 SMA equal to 200 SMA means short history; anomalous single bars).
 
 ### Fundamentals Analyst
-Work the annual + quarterly income statement, balance sheet, cash flow, and insider transactions. Trace multi-year trends (revenue, margins, EBITDA, net income, FCF, debt, equity, inventory, cash). Call out inflections and inconsistencies. **For an index/ETF**: state that company-style fundamentals don't apply, note it's expected, and defer to technical + macro. Profile/valuation being "withheld" is the point-in-time guard, not a failure.
+Work the annual + quarterly income statement, balance sheet, cash flow, and insider transactions. Trace multi-year trends (revenue, margins, EBITDA, net income, FCF, debt, equity, inventory, cash). Call out inflections and inconsistencies. **For an index or ETF**: state that company-style fundamentals don't apply, note it's expected, and defer to technical + macro. Profile/valuation being "withheld" is the point-in-time guard, not a failure.
 
 ### News Analyst
-Summarize ticker news and global/macro headlines relevant to the instrument. Ground macro claims in the FRED tables if present; if `FRED_API_KEY` was not set, say macro data was unavailable rather than guessing. For an Indian instrument, note when global feeds carry little India-relevant signal and recommend NSE/BSE filings + Indian financial media as supplements. No fabricated figures.
+Summarize ticker news and global/macro headlines relevant to the instrument. Ground macro claims in the FRED tables if present; if FRED was unavailable, say so rather than guessing. For an Indian instrument, note when global feeds carry little India-relevant signal and recommend NSE/BSE filings + Indian financial media as supplements. No fabricated figures.
 
 ## Step 3 — Research debate (`--rounds N`, default 1)
 
@@ -85,7 +86,7 @@ Evaluate the debate on merits (not who spoke last). Output:
 Turn the plan into a proposal, grounding price levels in the Market Analyst's price structure (current price, support/resistance, ATR):
 - **Action** — Buy / Sell / Hold
 - **Reasoning**
-- **Entry Price** — absolute price level in the quote currency (not a %, not a range), or omit
+- **Entry Price** — absolute price level in the quote currency (not a percent, not a range), or omit
 - **Stop Loss** — absolute price level
 - **Position Sizing** — explicit
 - `FINAL TRANSACTION PROPOSAL: **BUY/SELL/HOLD**`
@@ -101,14 +102,14 @@ Three analysts argue over the Trader's proposal, each rebutting the other two:
 
 Synthesize the risk debate. Output:
 - **Rating** — exactly one of **Buy / Overweight / Hold / Underweight / Sell** (Hold if genuinely balanced/ambiguous).
-- **Executive Summary** — the actionable call in 3-5 sentences (exit/trim/add %, levels, horizon).
+- **Executive Summary** — the actionable call in 3-5 sentences (exit/trim/add amount, levels, horizon).
 - **Investment Thesis** — grounded in specific analyst evidence.
 - **Price Target**, **Time Horizon**.
 - If ETF: restate the NAV-premium blind spot.
 
 ## Step 8 — Write the report tree
 
-Create `reports/<TICKER>_<UTC timestamp YYYYMMDD_HHMMSS>/` and write:
+Create `reports/TICKER_TIMESTAMP/` (UTC timestamp as YYYYMMDD_HHMMSS) and write:
 
 ```
 1_analysts/market.md          1_analysts/news.md          1_analysts/fundamentals.md
@@ -116,7 +117,7 @@ Create `reports/<TICKER>_<UTC timestamp YYYYMMDD_HHMMSS>/` and write:
 3_trading/trader.md
 4_risk/aggressive.md   4_risk/conservative.md   4_risk/neutral.md
 5_portfolio/decision.md
-complete_report.md            # all of the above concatenated with section headers
+complete_report.md            (all of the above concatenated with section headers)
 ```
 
 Match the format of any existing folder under `reports/`. Then give the user:
@@ -125,7 +126,7 @@ the final **Rating**, the one-paragraph thesis, key levels, horizon, and any dat
 ## Batch
 
 For several tickers, loop Steps 0-8 per ticker and finish with a summary table
-(ticker → rating → target → one-line why). Reuse one bundle per ticker.
+(ticker, rating, target, one-line why). Reuse one bundle per ticker.
 
 ## Cost note
 
